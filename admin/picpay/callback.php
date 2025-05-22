@@ -5,7 +5,7 @@
 date_default_timezone_set('America/Sao_Paulo');
 
 // Caminho para log
-$logFile = __DIR__ . '/logs.txt';
+$logFile = __DIR__ . '../../../callback-logs.txt';
 
 // Lê o conteúdo JSON enviado pelo PicPay
 $input = file_get_contents("php://input");

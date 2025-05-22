@@ -2,7 +2,7 @@
 
 namespace PicPay;
 
-use PicPay\Exceptions\PicPayException;
+use Exception;
 
 class Client
 {
@@ -12,52 +12,59 @@ class Client
     public function __construct(string $token, bool $sandbox = false)
     {
         $this->token = $token;
-        $this->baseUrl = $sandbox 
-            ? 'https://sandbox.picpay.com/ecommerce/public' 
-            : 'https://appws.picpay.com/ecommerce/public';
+        $this->baseUrl = $sandbox
+            ? 'https://checkout-api-sandbox.picpay.com/api/v1/'
+            : 'https://checkout-api.picpay.com/api/v1/';
     }
 
-    public function post(string $endpoint, array $data): array
+    private function request(string $method, string $endpoint, ?array $data = null): array
     {
         $url = $this->baseUrl . $endpoint;
 
         $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
-            'x-picpay-token: ' . $this->token
+            'x-picpay-token: ' . $this->token,
         ]);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
+        if ($data !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        }
+
         $response = curl_exec($ch);
+
+        if ($response === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            throw new Exception("Erro CURL: $err");
+        }
+
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
         if ($httpCode >= 400) {
-            throw new PicPayException("Erro na requisição [$httpCode]: $response");
+            throw new Exception("Erro na requisição [$httpCode]: $response");
         }
 
-        return json_decode($response, true);
+        $decoded = json_decode($response, true);
+
+        if ($decoded === null) {
+            throw new Exception("Erro ao decodificar JSON: $response");
+        }
+
+        return $decoded;
     }
 
-    public function get(string $endpoint): array
+    public function createPayment(array $data): array
     {
-        $url = $this->baseUrl . $endpoint;
+        return $this->request('POST', 'payments', $data);
+    }
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'x-picpay-token: ' . $this->token
-        ]);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode >= 400) {
-            throw new PicPayException("Erro na requisição [$httpCode]: $response");
-        }
-
-        return json_decode($response, true);
+    public function getPayment(string $paymentId): array
+    {
+        return $this->request('GET', "payments/{$paymentId}");
     }
 }
